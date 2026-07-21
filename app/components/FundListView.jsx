@@ -89,47 +89,41 @@ const FundListView = React.memo(function FundListView({
         >
           {/* PC 列表：使用 PcFundTable + 右侧冻结操作列 */}
           {viewMode === 'list' && !isMobile && (
-            <div className="table-pc-wrap">
-              <div className="table-scroll-area">
-                <div className="table-scroll-area-inner">
-                  <PcFundTable
-                    stickyTop={navbarHeight + filterBarHeight}
-                    data={pcFundTableData}
-                    relatedSectorSessionKey={userId ?? ''}
-                    currentTab={currentTab}
-                    groups={groups}
-                    favorites={favorites}
-                    sortBy={sortBy}
-                    sortOrder={sortOrder}
-                    sortRules={sortRules}
-                    onSortChange={(id) => {
-                      startTransition(() => {
-                        if (sortBy === id) {
-                          setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
-                        } else {
-                          setSortBy(id);
-                          setSortOrder('desc');
-                        }
-                      });
-                    }}
-                    onReorder={handleReorder}
-                    onRemoveFund={handleRemoveFundEntry}
-                    onRemoveFunds={removeFundsFromCurrentTabHandler}
-                    onMoveFunds={handleMoveFunds}
-                    batchSelectionClearRef={pcBatchClearSelectionRef}
-                    onToggleFavorite={handleToggleFavoriteRow}
-                    onHoldingAmountClick={handleHoldingAmountClickRow}
-                    onHoldingProfitClick={handleHoldingProfitClickRow}
-                    onCustomSettingsChange={triggerCustomSettingsSync}
-                    closeDialogRef={fundDetailDialogCloseRef}
-                    masked={maskAmounts}
-                    getFundCardProps={getFundCardPropsForRow}
-                    onFundTagsClick={openFundTagsEdit}
-                    fundExtraDataByCode={fundExtraDataByCode}
-                  />
-                </div>
-              </div>
-            </div>
+            <PcFundTable
+              stickyTop={navbarHeight + filterBarHeight}
+              data={pcFundTableData}
+              relatedSectorSessionKey={userId ?? ''}
+              currentTab={currentTab}
+              groups={groups}
+              favorites={favorites}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              sortRules={sortRules}
+              onSortChange={(id) => {
+                startTransition(() => {
+                  if (sortBy === id) {
+                    setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+                  } else {
+                    setSortBy(id);
+                    setSortOrder('desc');
+                  }
+                });
+              }}
+              onReorder={handleReorder}
+              onRemoveFund={handleRemoveFundEntry}
+              onRemoveFunds={removeFundsFromCurrentTabHandler}
+              onMoveFunds={handleMoveFunds}
+              batchSelectionClearRef={pcBatchClearSelectionRef}
+              onToggleFavorite={handleToggleFavoriteRow}
+              onHoldingAmountClick={handleHoldingAmountClickRow}
+              onHoldingProfitClick={handleHoldingProfitClickRow}
+              onCustomSettingsChange={triggerCustomSettingsSync}
+              closeDialogRef={fundDetailDialogCloseRef}
+              masked={maskAmounts}
+              getFundCardProps={getFundCardPropsForRow}
+              onFundTagsClick={openFundTagsEdit}
+              fundExtraDataByCode={fundExtraDataByCode}
+            />
           )}
 
           {/* 移动端列表：使用 MobileFundTable */}
@@ -225,6 +219,7 @@ const FundListView = React.memo(function FundListView({
                     onFundTagsClick={openFundTagsEdit}
                     fundExtraData={fundExtraDataByCode[f.code]}
                     groupTotalHoldingAmount={groupTotalHoldingAmount}
+                    hasDca={f.hasDca}
                     hasPending={f.hasPending}
                     userId={userId}
                   />

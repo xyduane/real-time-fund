@@ -16,7 +16,7 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
-import { isArray, isBoolean, isFunction, isNumber, isObject, isPlainObject, isString } from 'lodash';
+import { isArray, isBoolean, isFunction, isNil, isNumber, isObject, isPlainObject, isString } from 'lodash';
 import { v4 as uuidv4 } from 'uuid';
 import { toast as sonnerToast } from 'sonner';
 
@@ -459,7 +459,7 @@ export default function HomePage() {
     const linked = new Set();
     const groupIdsByCode = {};
 
-    const hasGlobalHolding = (h) => !!h && isNumber(h.share) && Number(h.share) > 0;
+    const hasGlobalHolding = (h) => !isNil(h) && isNumber(h.share) && Number(h.share) >= 0;
 
     for (const fund of funds || []) {
       const code = fund?.code;
@@ -477,7 +477,7 @@ export default function HomePage() {
         const h = groupHoldings?.[gid]?.[code];
         if (!h) continue;
         const s = Number(h.share);
-        if (!Number.isFinite(s) || s <= 0) continue;
+        if (!Number.isFinite(s) || s < 0) continue;
         sourceGroupIds.push(gid);
         totalShare += s;
 
@@ -488,10 +488,10 @@ export default function HomePage() {
         }
       }
 
-      if (totalShare > 0) {
+      if (sourceGroupIds.length > 0) {
         derived[code] = {
           share: totalShare,
-          cost: hasAnyCost ? totalCostShare / totalShare : null
+          cost: hasAnyCost && totalShare > 0 ? totalCostShare / totalShare : hasAnyCost ? 0 : null
         };
         linked.add(code);
         groupIdsByCode[code] = sourceGroupIds;
@@ -677,6 +677,22 @@ export default function HomePage() {
     const bucket = scoped[activeGroupId || DCA_SCOPE_GLOBAL];
     return isPlainObject(bucket) ? bucket : {};
   }, [dcaPlans, activeGroupId]);
+
+  // 全局及所有分组中存在开启定投计划的基金代码集合（用于关联持仓跨分组展示「定」标签）
+  const allEnabledDcaCodes = useMemo(() => {
+    const set = new Set();
+    const scoped = migrateDcaPlansToScoped(dcaPlans);
+    if (isPlainObject(scoped)) {
+      Object.values(scoped).forEach((bucket) => {
+        if (isPlainObject(bucket)) {
+          Object.entries(bucket).forEach(([code, plan]) => {
+            if (plan?.enabled === true) set.add(code);
+          });
+        }
+      });
+    }
+    return set;
+  }, [dcaPlans]);
 
   const transactionsForTab = useMemo(() => {
     if (!activeGroupId) return transactions;
@@ -1369,7 +1385,7 @@ export default function HomePage() {
         fundTags,
         isHoldingLinked: !!isHoldingLinked,
         isUpdated: isNavUpdated(f.jzrq, todayStr, f.confirmDays),
-        hasDca: dcaPlansForTab[f.code]?.enabled === true,
+        hasDca: isHoldingLinked ? allEnabledDcaCodes.has(f.code) : dcaPlansForTab[f.code]?.enabled === true,
         hasPending: pendingCodesForTab.has(f.code),
         latestNav,
         latestNavDate: yesterdayDate,
@@ -1419,6 +1435,7 @@ export default function HomePage() {
     todayStr,
     getHoldingProfitForTab,
     dcaPlansForTab,
+    allEnabledDcaCodes,
     pendingCodesForTab,
     latestDailyByCode,
     currentTab,
@@ -1979,6 +1996,16 @@ export default function HomePage() {
   const scrollTabsRightBtn = () => {
     if (!scrollAreaRef.current) return;
     scrollAreaRef.current.scrollBy({ left: 200, behavior: 'smooth' });
+  };
+
+  const scrollTabsToLeftEnd = () => {
+    if (!scrollAreaRef.current) return;
+    scrollAreaRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+  };
+
+  const scrollTabsToRightEnd = () => {
+    if (!scrollAreaRef.current) return;
+    scrollAreaRef.current.scrollTo({ left: scrollAreaRef.current.scrollWidth, behavior: 'smooth' });
   };
 
   const handleTabClick = (tabId) => {
@@ -2946,7 +2973,7 @@ export default function HomePage() {
 
     if (gid) {
       const gh = groupHoldings[gid]?.[fund.code];
-      const hasGroupHolding = gh && isNumber(gh.share) && gh.share > 0;
+      const hasGroupHolding = !isNil(gh) && isNumber(gh.share) && gh.share >= 0;
       const hasGroupPending = pendingTrades.some((t) => t.fundCode === fund.code && t.groupId === gid);
       const scoped = migrateDcaPlansToScoped(dcaPlans);
       const hasGroupDca = !!scoped[gid]?.[fund.code];
@@ -2964,9 +2991,9 @@ export default function HomePage() {
     }
 
     const h = holdings[fund.code];
-    const hasGlobalHolding = h && isNumber(h.share) && h.share > 0;
+    const hasGlobalHolding = !isNil(h) && isNumber(h.share) && h.share >= 0;
     const hasGroupHolding = Object.values(groupHoldings || {}).some(
-      (b) => b && b[fund.code] && isNumber(b[fund.code].share) && b[fund.code].share > 0
+      (b) => !isNil(b) && !isNil(b[fund.code]) && isNumber(b[fund.code].share) && b[fund.code].share >= 0
     );
     const hasHolding = hasGlobalHolding || hasGroupHolding;
     const otherGroups = groups.filter((g) => g.codes.includes(fund.code)).map((g) => g.name);
@@ -2990,7 +3017,7 @@ export default function HomePage() {
       const scoped = migrateDcaPlansToScoped(dcaPlans);
       const needsConfirm = list.some((code) => {
         const gh = groupHoldings[gid]?.[code];
-        const hasGroupHolding = gh && isNumber(gh.share) && gh.share > 0;
+        const hasGroupHolding = !isNil(gh) && isNumber(gh.share) && gh.share >= 0;
         const hasGroupPending = pendingTrades.some((t) => t.fundCode === code && t.groupId === gid);
         const hasGroupDca = !!scoped[gid]?.[code];
         const txList = transactions[code] || [];
@@ -3025,9 +3052,9 @@ export default function HomePage() {
     }
     const needsGlobalConfirm = list.some((code) => {
       const h = holdings[code];
-      const hasGlobalHolding = h && isNumber(h.share) && h.share > 0;
+      const hasGlobalHolding = !isNil(h) && isNumber(h.share) && h.share >= 0;
       const hasGroupHolding = Object.values(groupHoldings || {}).some(
-        (b) => b && b[code] && isNumber(b[code].share) && b[code].share > 0
+        (b) => !isNil(b) && !isNil(b[code]) && isNumber(b[code].share) && b[code].share >= 0
       );
       return hasGlobalHolding || hasGroupHolding;
     });
@@ -3061,10 +3088,11 @@ export default function HomePage() {
 
     const isCustomTab = (tab) => tab && tab !== 'all' && tab !== 'fav' && groups.some((g) => g?.id === tab);
     const fromGid = isCustomTab(fromTab) ? fromTab : null;
-    const toGid = targetId && targetId !== 'all' ? targetId : null;
+    const toGid = targetId && targetId !== 'all' && targetId !== 'fav' ? targetId : null;
 
-    if (targetId === 'all') {
-      if (!fromGid) return { conflicts: [] };
+    if (targetId === 'all' || targetId === 'fav') {
+      if (targetId === 'all' && !fromGid && fromTab !== 'fav') return { conflicts: [] };
+      if (targetId === 'fav' && !fromGid && fromTab !== 'all') return { conflicts: [] };
     } else {
       if (!toGid || !groups.some((g) => g?.id === toGid)) return { conflicts: [] };
       if (toGid === fromGid) return { conflicts: [] };
@@ -3234,6 +3262,28 @@ export default function HomePage() {
       const next = { ...base, [fromKey]: fromBucket, [toKey]: toBucket };
       return next;
     });
+
+    // 7) favorites：维护自选星标状态
+    if (targetId === 'fav' || fromTab === 'fav' || toGid) {
+      setFavorites((prev) => {
+        const next = new Set(prev || []);
+        let changed = false;
+        for (const code of list) {
+          if (targetId === 'fav') {
+            if (!next.has(code)) {
+              next.add(code);
+              changed = true;
+            }
+          } else if (fromTab === 'fav' || toGid) {
+            if (next.has(code)) {
+              next.delete(code);
+              changed = true;
+            }
+          }
+        }
+        return changed ? next : prev;
+      });
+    }
 
     // 迁移成功后切换到目标分组
     setCurrentTab(targetId === 'all' ? 'all' : targetId);
@@ -4133,9 +4183,9 @@ export default function HomePage() {
       // 自定义分组：未设置持仓时，如果“全部”存在全局持仓，则提示迁移
       if (activeGroupId && meta?.hasHolding === false) {
         const gh = groupHoldings?.[activeGroupId]?.[row.code];
-        const hasGroupShare = gh && isNumber(gh.share) && gh.share > 0;
+        const hasGroupShare = !isNil(gh) && isNumber(gh.share) && gh.share >= 0;
         const global = holdings?.[row.code];
-        const hasGlobalShare = global && isNumber(global.share) && global.share > 0;
+        const hasGlobalShare = !isNil(global) && isNumber(global.share) && global.share >= 0;
         if (!hasGroupShare && hasGlobalShare) {
           const name = row.rawFund?.name ?? row.fundName ?? row.code;
           setHoldingMigrateDialog({
@@ -4175,9 +4225,9 @@ export default function HomePage() {
       // 自定义分组：卡片视图/抽屉中“未设置持仓”点击时也走同样迁移提示
       if (activeGroupId && code) {
         const gh = groupHoldings?.[activeGroupId]?.[code];
-        const hasGroupShare = gh && isNumber(gh.share) && gh.share > 0;
+        const hasGroupShare = !isNil(gh) && isNumber(gh.share) && gh.share >= 0;
         const global = holdings?.[code];
-        const hasGlobalShare = global && isNumber(global.share) && global.share > 0;
+        const hasGlobalShare = !isNil(global) && isNumber(global.share) && global.share >= 0;
         if (!hasGroupShare && hasGlobalShare) {
           const name = fund?.name ?? code;
           setHoldingMigrateDialog({
@@ -4295,6 +4345,11 @@ export default function HomePage() {
         onFundTagsClick: openFundTagsEdit,
         fundExtraData: fundExtraDataByCode[fund.code] || fund.fundExtraData,
         groupTotalHoldingAmount,
+        hasDca: row
+          ? row.hasDca
+          : !!row?.isHoldingLinked
+            ? allEnabledDcaCodes.has(fund.code)
+            : dcaPlansForTab[fund.code]?.enabled === true,
         hasPending: pendingCodesForTab.has(fund.code),
         userId: user?.id
       };
@@ -4304,6 +4359,7 @@ export default function HomePage() {
       currentTab,
       favorites,
       dcaPlansForTab,
+      allEnabledDcaCodes,
       holdingsForTabWithLinked,
       percentModes,
       todayPercentModes,
@@ -4689,7 +4745,9 @@ export default function HomePage() {
                               transition={{ duration: 0.15 }}
                               className={`tabs-scroll-btn left ${!canLeft ? 'opacity-30 cursor-not-allowed' : ''}`}
                               disabled={!canLeft}
+                              title="单击向左滚动，双击滚动到最左端"
                               onClick={scrollTabsLeftBtn}
+                              onDoubleClick={scrollTabsToLeftEnd}
                             >
                               <ChevronLeft size={16} />
                             </motion.button>
@@ -4702,7 +4760,9 @@ export default function HomePage() {
                               transition={{ duration: 0.15 }}
                               className={`tabs-scroll-btn right ${!canRight ? 'opacity-30 cursor-not-allowed' : ''}`}
                               disabled={!canRight}
+                              title="单击向右滚动，双击滚动到最右端"
                               onClick={scrollTabsRightBtn}
+                              onDoubleClick={scrollTabsToRightEnd}
                             >
                               <ChevronRight size={16} />
                             </motion.button>
@@ -4749,35 +4809,26 @@ export default function HomePage() {
                             >
                               全部 ({funds.length})
                             </motion.button>
-                            {!showGroupDropdown && (
-                              <motion.button
-                                layout
-                                initial={{ opacity: 0, scale: 0.8 }}
-                                animate={{ opacity: 1, scale: 1 }}
-                                exit={{ opacity: 0, scale: 0.8 }}
-                                key="fav"
-                                className={`tab ${currentTab === 'fav' ? 'active' : ''}`}
-                                onClick={() => handleTabClick('fav')}
-                                transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 1 }}
-                              >
-                                自选 ({favorites.size})
-                              </motion.button>
-                            )}
                             {!showGroupDropdown &&
-                              groups.map((g) => (
-                                <motion.button
-                                  layout
-                                  initial={{ opacity: 0, scale: 0.8 }}
-                                  animate={{ opacity: 1, scale: 1 }}
-                                  exit={{ opacity: 0, scale: 0.8 }}
-                                  key={g.id}
-                                  className={`tab ${currentTab === g.id ? 'active' : ''}`}
-                                  onClick={() => handleTabClick(g.id)}
-                                  transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 1 }}
-                                >
-                                  {g.name} ({g.codes.length})
-                                </motion.button>
-                              ))}
+                              groups.map((g) => {
+                                const isFav = g.id === 'fav' || g.isPreset;
+                                const count = isFav ? favorites.size : g.codes?.length || 0;
+                                const label = isFav ? '自选' : g.name;
+                                return (
+                                  <motion.button
+                                    layout
+                                    initial={{ opacity: 0, scale: 0.8 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.8 }}
+                                    key={g.id}
+                                    className={`tab ${currentTab === g.id ? 'active' : ''}`}
+                                    onClick={() => handleTabClick(g.id)}
+                                    transition={{ type: 'spring', stiffness: 500, damping: 30, mass: 1 }}
+                                  >
+                                    {label} ({count})
+                                  </motion.button>
+                                );
+                              })}
                             {showGroupDropdown && (
                               <div
                                 key="group-dropdown"
@@ -4809,19 +4860,21 @@ export default function HomePage() {
                                   <SelectContent
                                     position="popper"
                                     align="start"
-                                    className="max-h-none"
                                     style={{
-                                      width: isMobile ? 230 : 300,
-                                      maxHeight: 'none'
+                                      width: isMobile ? 230 : 300
                                     }}
                                   >
                                     <SelectGroup>
-                                      <SelectItem value="fav">自选 ({favorites.size})</SelectItem>
-                                      {groups.map((g) => (
-                                        <SelectItem key={g.id} value={g.id}>
-                                          {g.name} ({g.codes.length})
-                                        </SelectItem>
-                                      ))}
+                                      {groups.map((g) => {
+                                        const isFav = g.id === 'fav' || g.isPreset;
+                                        const count = isFav ? favorites.size : g.codes?.length || 0;
+                                        const label = isFav ? '自选' : g.name;
+                                        return (
+                                          <SelectItem key={g.id} value={g.id}>
+                                            {label} ({count})
+                                          </SelectItem>
+                                        );
+                                      })}
                                     </SelectGroup>
                                   </SelectContent>
                                 </Select>
